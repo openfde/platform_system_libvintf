@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+/*
+* 1.Openfde doesn't need some checkCompatibility.
+*/
+
 
 #define LOG_TAG "libvintf"
 
@@ -77,6 +81,9 @@ bool RuntimeInfo::checkCompatibility(const CompatibilityMatrix& mat, std::string
                     + " compatibility matrix.";
         }
         return false;
+    }
+    if (true) {
+        return true;
     }
     if (kernelSepolicyVersion() < mat.framework.mSepolicy.kernelSepolicyVersion()) {
         if (error != nullptr) {
