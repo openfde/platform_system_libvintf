@@ -34,6 +34,7 @@ status_t LoadKernelConfigs(std::map<std::string, std::string>* configs) {
     gzFile f = gzopen("/proc/config.gz", "rb");
     if (f == NULL) {
         LOG(ERROR) << "Could not open /proc/config.gz: " << errno;
+	errno = 0;
         return -errno;
     }
 
