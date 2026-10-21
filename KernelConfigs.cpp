@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <fcntl.h>
+#include <unistd.h>
+#include <cstring>   // strerror
 #include "KernelConfigs.h"
 
 #ifdef _WIN32
@@ -41,10 +44,50 @@ static inline size_t getPageSize() {
 namespace android {
 namespace kernelconfigs {
 
+namespace {
+
+status_t LoadKernelConfigsFromPlainFile(const char* path,
+                                        vintf::KernelConfigParser* parser) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        int open_errno = errno;
+        LOG(ERROR) << "Could not open " << path << ": " << open_errno;
+        return -open_errno;
+    }
+
+    char buf[BUFFER_SIZE];
+    status_t err = OK;
+    ssize_t len;
+    while ((len = read(fd, buf, sizeof buf)) > 0) {
+        parser->process(buf, len);
+    }
+    if (len < 0) {
+        int read_errno = errno;
+        LOG(ERROR) << "Could not read " << path << ": " << strerror(read_errno);
+        err = -read_errno;
+    }
+    parser->finish();
+    close(fd);
+    return err;
+}
+
+}
+
+
+
 status_t LoadKernelConfigs(std::map<std::string, std::string>* configs) {
     vintf::KernelConfigParser parser;
+    status_t err = OK;
+
     gzFile f = gzopen("/proc/config.gz", "rb");
     if (f == NULL) {
+        if (errno == ENOENT) {
+            // 内核没有导出压缩版配置，回退读取明文 /configs/config
+            err = LoadKernelConfigsFromPlainFile("/configs/config", &parser);
+            if (err != OK) return err;
+            *configs = std::move(parser.configs());
+            return OK;
+        }
         LOG(ERROR) << "Could not open /proc/config.gz: " << errno;
         return -errno;
     }
@@ -54,7 +97,6 @@ status_t LoadKernelConfigs(std::map<std::string, std::string>* configs) {
     while ((len = gzread(f, buf, sizeof buf)) > 0) {
         parser.process(buf, len);
     }
-    status_t err = OK;
     if (len < 0) {
         int errnum;
         const char* errmsg = gzerror(f, &errnum);
